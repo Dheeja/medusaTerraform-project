@@ -289,7 +289,7 @@ resource "aws_secretsmanager_secret" "medusa_env" {
 resource "aws_secretsmanager_secret_version" "medusa_env_version" {
   secret_id     = aws_secretsmanager_secret.medusa_env.id
   secret_string = jsonencode({
-    DATABASE_URL  = "postgresql://<username>:<password>@<host>:5432/medusadb",
+    DATABASE_URL  = "postgresql://${aws_db_instance.medusa_db.username}:${aws_db_instance.medusa_db.password}@${aws_db_instance.medusa_db.endpoint}:5432/${aws_db_instance.medusa_db.db_name}",
     JWT_SECRET    = "supersecretjwt",
     COOKIE_SECRET = "supersecretcookie",
     STORE_CORS    = "http://localhost:8000",
@@ -326,6 +326,58 @@ output "ecs_cluster_id" {
 output "ecs_task_definition_arn" {
   value = aws_ecs_task_definition.medusa.arn
 }
+
+# RDS Database Instance
+resource "aws_db_instance" "medusa_db" {
+  allocated_storage      = 20
+  engine                 = "postgres"
+  engine_version         = "14.1"
+  instance_class         = "db.t3.micro" # Free tier eligible
+  db_name                   = "medusadb"
+  username               = "admin"
+  password               = "supersecurepassword"
+  publicly_accessible    = true
+  skip_final_snapshot    = true
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+}
+
+# Subnet Group for RDS
+resource "aws_db_subnet_group" "main" {
+  name       = "medusa-db-subnet-group"
+  subnet_ids = [aws_subnet.public_subnet1.id, aws_subnet.public_subnet2.id]
+
+  tags = {
+    Name = "medusa-db-subnet-group"
+  }
+}
+
+# Security Group for RDS
+resource "aws_security_group" "rds_sg" {
+  name        = "rds-security-group"
+  description = "Allow database access"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Output the RDS Endpoint
+output "rds_endpoint" {
+  value = aws_db_instance.medusa_db.endpoint
+}
+
 # Add to the bottom of your Terraform script
 resource "local_file" "medusa_env_file" {
   filename = "${path.module}/.env"
