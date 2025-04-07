@@ -331,7 +331,7 @@ output "ecs_task_definition_arn" {
 resource "aws_db_instance" "medusa_db" {
   allocated_storage      = 20
   engine                 = "postgres"
-  engine_version         = "14.1"
+  engine_version         = "16.8-R1"
   instance_class         = "db.t3.micro" # Free tier eligible
   db_name                   = "medusadb"
   username               = "admin"
