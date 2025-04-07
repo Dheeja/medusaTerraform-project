@@ -1,5 +1,5 @@
-provider "aws" {
-  region = "ap-south-1"
+variable "aws_region" {
+  default = "ap-south-1"
 }
 
 # VPC Configuration
@@ -109,7 +109,7 @@ resource "aws_security_group" "lb_sg" {
 
 resource "aws_cloudwatch_log_group" "ecs_medusa_logs" {
   name              = "/ecs/medusa"
-  retention_in_days = 7  # Adjust this value based on your log retention requirements
+  retention_in_days = 7
   tags = {
     Environment = "production"
     Application = "medusa"
@@ -134,7 +134,7 @@ resource "aws_ecs_task_definition" "medusa" {
   container_definitions = jsonencode([
     {
       name      = "medusa"
-      image     = "902651842522.dkr.ecr.ap-south-1.amazonaws.com/medusa:latest" # Replace this with your actual ECR image URI
+      image     = "902651842522.dkr.ecr.ap-south-1.amazonaws.com/medusa:latest"
       essential = true
       portMappings = [
         {
@@ -153,7 +153,7 @@ resource "aws_ecs_task_definition" "medusa" {
       }
     }
   ])
-  
+
   depends_on = [aws_cloudwatch_log_group.ecs_medusa_logs]
 
 }
@@ -209,7 +209,7 @@ resource "aws_lb_target_group" "medusa_target_group" {
   name     = "medusa-target-group"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id # Updated to use the dynamic VPC ID
+  vpc_id   = aws_vpc.main.id
   target_type = "ip"
 
   health_check {
@@ -227,7 +227,7 @@ resource "aws_lb_target_group" "medusa_target_group" {
 
 resource "aws_ecr_repository" "medusa" {
   name                 = "medusa"
-  image_tag_mutability = "MUTABLE"  # Can be IMMUTABLE if you prefer
+  image_tag_mutability = "MUTABLE"
   tags = {
     Name        = "medusa"
     Environment = "production"
@@ -281,6 +281,23 @@ resource "aws_iam_policy_attachment" "ecs_task_policy_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Secrets Manager - .env file equivalent
+resource "aws_secretsmanager_secret" "medusa_env" {
+  name = "medusa-env"
+}
+
+resource "aws_secretsmanager_secret_version" "medusa_env_version" {
+  secret_id     = aws_secretsmanager_secret.medusa_env.id
+  secret_string = jsonencode({
+    DATABASE_URL  = "postgresql://<username>:<password>@<host>:5432/medusadb",
+    JWT_SECRET    = "supersecretjwt",
+    COOKIE_SECRET = "supersecretcookie",
+    STORE_CORS    = "http://localhost:8000",
+    ADMIN_CORS    = "http://localhost:7000",
+    MEDUSA_BACKEND_URL = "http://${aws_lb.medusa_lb.dns_name}"
+  })
+}
+
 # Outputs
 output "vpc_id" {
   value = aws_vpc.main.id
@@ -290,7 +307,7 @@ output "public_subnet1_id" {
   value = aws_subnet.public_subnet1.id
 }
 
-output "public_subnet2_id" { # Corrected typo
+output "public_subnet2_id" {
   value = aws_subnet.public_subnet2.id
 }
 
@@ -308,4 +325,24 @@ output "ecs_cluster_id" {
 
 output "ecs_task_definition_arn" {
   value = aws_ecs_task_definition.medusa.arn
+}
+# Add to the bottom of your Terraform script
+resource "local_file" "medusa_env_file" {
+  filename = "${path.module}/.env"
+  content  = <<EOT
+# Medusa Backend Environment Variables
+
+DOMAIN_URL=http://${aws_lb.medusa_lb.dns_name}
+PORT=80
+ECS_CLUSTER_NAME=${aws_ecs_cluster.main.name}
+ECS_SERVICE_NAME=${aws_ecs_service.medusa_service.name}
+AWS_REGION=ap-south-1
+LOG_GROUP_NAME=${aws_cloudwatch_log_group.ecs_medusa_logs.name}
+DATABASE_URL=postgresql://<username>:<password>@<host>:5432/<dbname>
+
+# Secure Database URL from Secrets Manager
+DATABASE_URL=${jsondecode(aws_secretsmanager_secret_version.medusa_env_version.secret_string)["DATABASE_URL"]}
+
+EOT
+
 }
