@@ -1,0 +1,32 @@
+{
+    "family": "medusa-task",
+    "networkMode": "awsvpc",
+    "executionRoleArn": "arn:aws:iam::902651842522:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::902651842522:role/ecsTaskRole",
+    "containerDefinitions": [
+      {
+        "name": "medusa",
+        "image": "902651842522.dkr.ecr.ap-south-1.amazonaws.com/medusa:latest",
+        "essential": true,
+        "portMappings": [
+          {
+            "containerPort": 80,
+            "hostPort": 80,
+            "protocol": "tcp"
+          }
+        ],
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+            "awslogs-group": "/ecs/medusa",
+            "awslogs-region": "ap-south-1",
+            "awslogs-stream-prefix": "ecs"
+          }
+        }
+      }
+    ],
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512"
+  }
+  
