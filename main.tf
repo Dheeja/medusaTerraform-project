@@ -309,13 +309,10 @@ resource "aws_iam_policy_attachment" "ecs_task_policy_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Secrets Manager - .env file equivalent
-resource "aws_secretsmanager_secret" "medusa_env" {
-  name = "medusa-env"
-}
+
 
 resource "aws_secretsmanager_secret_version" "medusa_env_version" {
-  secret_id     = aws_secretsmanager_secret.medusa_env.id
+  secret_id     = data.aws_secretsmanager_secret.medusa_env.id
   secret_string = jsonencode({
     DATABASE_URL  = "postgresql://${aws_db_instance.medusa_db.username}:${aws_db_instance.medusa_db.password}@${aws_db_instance.medusa_db.endpoint}:5432/${aws_db_instance.medusa_db.db_name}",
     JWT_SECRET    = "supersecretjwt",
