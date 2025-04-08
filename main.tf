@@ -7,6 +7,18 @@ terraform {
   }
 }
 
+data "aws_secretsmanager_secret" "medusa_env" {
+  name = "medusa-env"
+}
+
+data "aws_secretsmanager_secret_version" "medusa_env_version" {
+  secret_id = data.aws_secretsmanager_secret.medusa_env.id
+}
+
+locals {
+  medusa_env = jsondecode(data.aws_secretsmanager_secret_version.medusa_env_version.secret_string)
+}
+
 # VPC Configuration
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -137,29 +149,40 @@ resource "aws_ecs_task_definition" "medusa" {
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([
-    {
-      name      = "medusa"
-      image     = "902651842522.dkr.ecr.ap-south-1.amazonaws.com/medusa:latest"
-      essential = true
-      portMappings = [
-        {
-          containerPort = 80
-          hostPort      = 80
-          protocol      = "tcp"
-        }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs_medusa_logs.name
-          "awslogs-region"        = "ap-south-1"
-          "awslogs-stream-prefix" = "ecs"
-        }
+  {
+    name      = "medusa"
+    image     = "902651842522.dkr.ecr.ap-south-1.amazonaws.com/medusa:latest"
+    essential = true
+    portMappings = [
+      {
+        containerPort = 80
+        hostPort      = 80
+        protocol      = "tcp"
+      }
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.ecs_medusa_logs.name
+        "awslogs-region"        = "ap-south-1"
+        "awslogs-stream-prefix" = "ecs"
       }
     }
-  ])
 
-  depends_on = [aws_cloudwatch_log_group.ecs_medusa_logs]
+    environment = [
+      {
+        name  = "DATABASE_URL"
+        value = local.medusa_env.DATABASE_URL
+      },
+      {
+        name  = "JWT_SECRET"
+        value = local.medusa_env.JWT_SECRET
+      }
+    ]
+  }
+])
+
+depends_on = [aws_cloudwatch_log_group.ecs_medusa_logs]
 
 }
 
@@ -336,7 +359,7 @@ output "ecs_task_definition_arn" {
 resource "aws_db_instance" "medusa_db" {
   allocated_storage      = 20
   engine                 = "postgres"
-  engine_version         = "16.8-R1"
+  engine_version         = "16.1"
   instance_class         = "db.t3.micro" # Free tier eligible
   db_name                   = "medusadb"
   username               = "admin"
