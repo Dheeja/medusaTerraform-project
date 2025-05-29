@@ -20,7 +20,7 @@ RUN npm install --legacy-peer-deps
 COPY . .
 
 # Expose the port your Medusa app is running on (this is set to 80 as per the ECS task definition)
-EXPOSE 80
+EXPOSE 9000
 
 # Build your Medusa app (if needed) - optional, depends on your specific Medusa setup
 # RUN npm run build  # Uncomment if you have a build process
